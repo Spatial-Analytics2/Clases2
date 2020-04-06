@@ -1,0 +1,157 @@
+---
+title: "Ayudantía_01"
+author: "Martín Sielfeld"
+date: "24-03-2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introducción a R
+Este tipo de archivo se conoce como R Markdown. Dentro de las ventajas de codificar en este tipo de documentos (en comparación a un script normal) se encuentra la facilidad para organizar los códigos de una manera más estructurada, así también como mantenerlos separados por "chunks". 
+Por ahora, nos centraremos en las funciones de R y las posibles interacciones entre objetos. A continuación, se presentan algunas funciones básicas de R con las cuales se pueden generar interacciones:
+
+### Secuencias:
+```{r Secuencias}
+seq(1,16)
+seq(1,16,3)
+```
+
+### Repeticiones:
+```{r Repeticiones} 
+rep(1,4)
+rep(c(1,5,8,2),4)
+```
+
+### Ordenar
+```{r Ordenar} 
+sort(c(1,9,8,4,6,3,6,5,2))
+sort(c(1,9,8,4,6,3,6,5,2), decreasing = T)
+```
+
+### Análisis básico
+```{r Análisis básico} 
+max(c(1,9,8,4,6,3,6,5,2))
+min(c(1,9,8,4,6,3,6,5,2))
+mean(c(1,9,8,4,6,3,6,5,2))
+median(c(1,9,8,4,6,3,6,5,2))
+quantile(c(1,9,8,4,6,3,6,5,2))
+```
+
+### Interacción
+```{r Interacción} 
+mean(rep(min(1,5,2),5))
+sort(rep(seq(1,5,2),5))
+```
+
+<br>
+
+## Tabajando con bases de datos
+Al trabajar con bases de datos es necesario saber que existen múltiples funciones que permiten analizar las cualidades y caracteristicas de estas. A continuación, se mostrará como trabajar con bases de datos de clase "data.table", ya sea en la manipulación de estas como el cálculo de valores básicos. El primer paso es escoger una base de datos con la cual trbajar. En dicha ayudantía trabajaremos con la base de datos "Titanic", la cual viene incluida en R al descargarlo.
+
+```{r paquetes}
+#install.packages("data.table")
+#install.packages("titanic")
+library(data.table)
+library(titanic)
+Titanic <- data.table(titanic_train)  ## Notar que ahí creamos un objeto que se llama Titanic, al cual transformamos en clase data.table
+```
+
+Antes de continuar, es vital saber como funciona el lenguaje de data.table. Por ejemplo:
+
+```{r data.table}
+Titanic[1,]  ## Arroja información sobre la primera fila
+Titanic[6:14,]  ## Arroja información sobre la fila 6 a 14
+Titanic[,4]  ## Arroja información sobre la cuarta columna
+Titanic[,2:8]  ## Arroja información sobre la columna 2 a 8
+Titanic[,.(Survived,Age)]  ## También se puede con nombres de variables
+```
+
+Ahora, aprendamos algunas estrategias de filtrado básico:
+
+```{r filtrado}
+Titanic[Survived == 1,]  ## Me quedo con aquellas filas que cumplen la condición de que el individuo sobrevivió
+Titanic[Pclass %in% c(1,3),]  ## Me quedo con aquellas filas que cumplen la condición de que el individuo era de clase 1 o 3
+Titanic[Age %between% c(30,50),]  ## Me quedo con aquellas filas que cumplen la condición de que el individuo tenía entre 30 y 50 años
+Titanic[Sex == "female", .(Survived,Age)]  ## Me quedo con la información de sobrevivencia y edad para el grupo de mujeres
+```
+
+Para más información sobre como manipular bases de datos, se recomienda visitar la página <https://atrebas.github.io/post/2019-03-03-datatable-dplyr/>, o bien consultar en páginas como Rpubs y Stack Overflow. Ahora si, veamos los datos de dicha base.
+
+```{r Viendo base}
+View(Titanic)
+head(Titanic,5)  #Alternativa
+nrow(Titanic)
+ncol(Titanic)
+```
+
+¿Que clase de objeto es dicha base de datos? ¿Y cada una de sus variables?
+
+```{r Clase}
+class(Titanic)
+class(Titanic[,Name])
+class(Titanic[,Ticket])
+class(Titanic[,Age])
+class(Titanic[,Survived])
+class(Titanic[,Embarked])
+```
+
+¿Cuantas categorías hay en cada variable de Titanic? ¿Cuales son?
+
+```{r Categorías}
+unique(Titanic[,Embarked])  ## intentar con función "levels" para el caso de columnas de clase "factor"    
+unique(Titanic[,Sex])
+unique(Titanic[,Pclass])
+unique(Titanic[,Survived])
+```
+
+En este caso son pocas categorías, pero: ¿que ocurriría si necesitamos saber cuantas categorías hay en la columna "Oficio" del censo de 2017? 
+
+```{r N° Categorías}
+length(unique(Titanic[,Age]))  #Por ejemplo   
+length(unique(Titanic[,Name]))
+```
+
+¿Existe alguna manera de sintetizar todo lo visto hasta ahora? Por supuesto que si.
+
+```{r str}
+str(Titanic)
+```
+
+Es necesario disponer de ciertos datos básicos sobre la matríz, de tal manera de saber a que nos enfrentamos. Revisemos nuevamente los datos básicos de la base de datos, según lo que vimos en "Análisis básico":
+
+```{r Análisis básico Titanic} 
+Titanic[,max(Age, na.rm = T)]  # ¿Por qué agregar na.rm = T? Hay que eliminar filas con NAs de la función
+Titanic[,min(Age, na.rm = T)]
+Titanic[,mean(Age, na.rm = T)]
+Titanic[,median(Age, na.rm = T)]
+Titanic[,quantile(Age, na.rm = T)]
+```
+
+Existe una función que nos puede entregar los datos antes calculados, pero solo ejecutando un comando.
+
+```{r summary}
+summary(Titanic)
+```
+
+¿Y si deseamos ver dicho análisis separando a los sobrevivientes de aquellos que murieron? ¿Como podemos ver dichos datos?
+
+```{r Análisis básico Titanic 2} 
+Titanic[,max(Age, na.rm = T), by = "Survived"]
+Titanic[,min(Age, na.rm = T), by = "Survived"]
+Titanic[,mean(Age, na.rm = T), by = "Survived"]
+Titanic[,median(Age, na.rm = T), by = "Survived"]
+Titanic[,quantile(Age, na.rm = T), by = "Survived"]
+```
+
+¿Y si deseamos ver los datos aún más desagregados? Por ejemplo, con respecto a si es sobreviviente y y por género.
+
+```{r Análisis básico Titanic 3} 
+Titanic[,max(Age, na.rm = T), by = c("Survived","Sex")]
+Titanic[,min(Age, na.rm = T), by = c("Survived","Sex")]
+Titanic[,mean(Age, na.rm = T), by = c("Survived","Sex")]
+Titanic[,median(Age, na.rm = T), by = c("Survived","Sex")]
+Titanic[,quantile(Age, na.rm = T), by = c("Survived","Sex")]
+```
