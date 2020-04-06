@@ -106,11 +106,14 @@ text(x =G$`Casos confirmados.Femenino`,y=G$`Casos confirmados.Masculino`, G$`Cen
 
 #ggplot2
 library(ggplot2)
+
+ggplot(data = E,mapping = aes(AvAge,`Casos confirmados`)) + geom_point() # aes todas las variables que quiero plotear
+
 ggplot(data = G,mapping = aes(x=`Casos confirmados.Femenino`,y=`Casos confirmados.Masculino`))+geom_point()
 
 ggplot(G,aes(x=`Casos confirmados.Femenino`,y=`Casos confirmados.Masculino`))+geom_point(aes(size=AvAge.Femenino,colour=AvAge.Masculino))+geom_text(aes(label=`Centro de salud`),size=2,check_overlap = T)
 
-ggplot(data = E,mapping = aes(x=AvAge,y=`Casos confirmados`))+geom_point()+facet_wrap(~Sexo)+geom_smooth(method = 'lm',se=F) + geom_smooth(method = 'loess',col='red',se=F)
+p1<-ggplot(data = E,mapping = aes(x=AvAge,y=`Casos confirmados`))+geom_point()+facet_wrap(~Sexo)+geom_smooth(method = 'lm', col= "light blue",se=F) + geom_smooth(method = 'loess',col='pink',se=F) #facet_wrap me divide en este caso por sexo(debe ser una variable factor y caracter), o sea, me separa femenino y masculino. geom_smooth  me sirve para ver si existe un patron, una linea de tendencia, method la linea que quiero utilizar y se = , loess para hacer ventanitas en este caso hacer distintas regreciones por los puntos
 
 
 #plotly
@@ -137,7 +140,7 @@ ggplot(casos,aes(x=Edad,group=Sexo,fill=Sexo))+geom_histogram()+facet_wrap(~fact
 
 #como sacamos el "fememino"?
 
-
+casos[Sexo=="Fememino",Sexo:="Femenino"]
 ggplot(casos,aes(x=Edad,group=Sexo,fill=Sexo))+geom_histogram()
 
 
@@ -156,7 +159,8 @@ library(data.table)
 
 
 
-# 3.1 Shapefiles as in the `sp` package
+# 3.1 Shapefiles as in the `sp` package, paquete clasico
+help(package="sp")
 View(ogrDrivers())
 
 comunas_rm<-readOGR("Class_04/ComunasR13/COMUNA_C17.shp")
@@ -164,9 +168,9 @@ class(comunas_rm)
 
 View(comunas_rm@data)
 plot(comunas_rm)
+coordinates(comunas_rm)
 
-
-centroids_rm<-SpatialPoints(coordinates(comunas_rm),proj4string = comunas_rm@proj4string)
+centroids_rm<-SpatialPoints(coordinates(comunas_rm),proj4string = comunas_rm@proj4string) #Crear un shapefile de puntos
 plot(comunas_rm)
 plot(centroids_rm,add=T,col='red',lty=1,pch=21,cex=0.1)
 lines(coordinates(comunas_rm),col='blue')
@@ -174,7 +178,7 @@ lines(coordinates(comunas_rm),col='blue')
 
 str(comunas_rm@data)
 
-# 3.2 Shapefiles as in the `sf` package
+# 3.2 Shapefiles as in the `sf` package, base de chilemapas
 
 zonas_censo<-data.table(censo_2017_zonas,stringsAsFactors = F)
 
