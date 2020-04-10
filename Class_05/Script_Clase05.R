@@ -2,7 +2,7 @@
 ## Author: Esteban Lopez
 ## Course: Spatial Analytics 
 ## Program: Master in Business Analytics
-## Institution: Universidad Adolfo Ibáñez
+## Institution: Universidad Adolfo Ibáñez (UAI)
 
 
 #---- Part 1: Data Management  -------------------
