@@ -1,4 +1,4 @@
-###Class 04 - Visualization & Intro to Mapping ###
+###Class 05 - Exploratory Spatial Data Analysis (ESDA) ###
 ## Author: Esteban Lopez
 ## Course: Spatial Analytics 
 ## Program: Master in Business Analytics
