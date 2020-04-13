@@ -4,6 +4,7 @@
 # Fuente: https://github.com/MinCiencia/Datos-COVID19 
 
 #install.packages('sf')
+
 library(data.table)
 library(ggplot2)
 
@@ -25,17 +26,18 @@ help(package='chilemapas')
 
 comunas_rm<-mapa_comunas[mapa_comunas$codigo_region==13,]
 
-comunas_rm<-merge(comunas_rm,covid,by.x="codigo_comuna",by.y="Codigo comuna",all.x=TRUE,sort=F)
+comunas_rm<-merge(x = comunas_rm,y = covid,by.x="codigo_comuna",by.y="Codigo comuna",all.x=TRUE,sort=F)
 
 
 # Choropleth plot (continuos scale)
 
 library(RColorBrewer)
-paleta <- rev(brewer.pal(n = 5,name = "Reds"))
+brewer.pal.info
+paleta <- brewer.pal(n = 5,name = "Reds")
 
 p_cont<-ggplot(comunas_rm) + 
   geom_sf(aes(fill = `Casos Confirmados`, geometry = geometry)) +
-  scale_fill_gradientn(colours = rev(paleta), name = "No. Casos") +
+  scale_fill_gradientn(colours = paleta, name = "No. Casos") +
   labs(title = "Casos Confirmados", subtitle = "Región Metropolitana - 2020-04-08") +
   theme_minimal(base_size = 11)
 
