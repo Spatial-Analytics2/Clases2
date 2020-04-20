@@ -71,3 +71,7 @@ plot(nbs,coordinates(comunas_rm),add=T,col='blue',pch=".")
 sl<-lag.listw(w_rm,comunas_rm$Confirmados_2020.04.17)
 
 plot(comunas_rm$Confirmados_2020.04.17,sl)
+
+
+# Optional Reading
+# https://cran.r-project.org/web/packages/spdep/vignettes/nb.pdf
