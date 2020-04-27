@@ -1,0 +1,274 @@
+---
+author: Martin Sielfeld
+output: 
+  html_document:
+  theme: cosmo
+  
+params:
+  reg:  3
+---
+
+```{r CREAMOS PARAMETROS,include=FALSE}
+reg <- params$reg
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning = FALSE,dpi=300)
+```
+
+---
+title: "Ayudantía 04"
+date: `r format(Sys.Date(), "%d/%m/%Y")`
+---
+
+```{r paquetes,include=FALSE}
+paquetes <- c('data.table',
+              'readxl',
+              'tidyverse',
+              'highcharter',
+              'sp',
+              'ggspatial',
+              'geojsonio',
+              'chilemapas')
+options(scipen=999,encoding = "UTF-8")
+paquetes_no_instalados <- paquetes[!(paquetes %in% installed.packages()[,"Package"])]  # Lista de aquellos paquetes no instalados 
+sapply(paquetes_no_instalados, install.packages,character.only=T)  # Instalamos dichos nuevos paquetes
+sapply(paquetes, library, character.only = TRUE); rm(paquetes, paquetes_no_instalados) # Cargamos los paquetes
+```
+
+## DATOS  DE POBREZA COMUNAL
+
+Hoy trabajaremos con datos de pobreza comunal, los cuales corresponden a datos censales del 2017 calculados por el Instituto Nacional de Estadística. Notar que hemos creado el objeto "params", el cual contiene la variable "reg" (de región). Intente cambiar el valor de reg al inicio del archivo (de 1 a 16) y vea como se puede automatizar los scripts para trabajar con distintas regiones sin mayor esfuerzo.
+
+```{r CARGANDO BASES,include=FALSE}
+mapa <- data.table(mapa_comunas)
+pobreza <- data.table(read_excel("I%CC%81NDICE-DE-POBREZA-POR-COMUNA-2017.xlsx"))
+```
+
+Notamos que la clase del código comunal, con el cual más adelante utilizaremos para hacer merge entre distintas bases, es de clase numérica. Po otro lado, la clase de los códigos comunales en el resto de las bases es de clase factor o character. En consecuencia, es necesario cambiar la clase de dicha varible y anteponer un "0" a aquellos códigos comunales que se encuentren por debajo de "10000" (dado que siendo clase numérica no considera los ceros al lado izquierdo). También se puede observar que la clase de la variable de pobreza comunal está en clase character, por lo que la cambiamos a variable numérica para tener una escla continua.
+
+```{r TRABAJANDO CON POBREZA}
+names(pobreza)[names(pobreza) == "Porc.Pobr"] <- "PORCPOBR"
+pobreza[, Cod.Com := ifelse(Cod.Com < 10000 , paste0("0",pobreza$Cod.Com), pobreza$Cod.Com)]
+pobreza$PORCPOBR <- as.numeric(pobreza$PORCPOBR)
+```
+
+Una vez arreglado estos problemas, hacemos un merge entre la base que contiene los datos de pobreza y la base que posee los vectores para generar los polígonos de las comunas. También modificamos la clase de la variable de codigo regional, de tal manera de poder filtrar mediante el parametro "reg" creado en "params"reg".
+
+```{r merge 1, include = TRUE}
+mapa <- merge(mapa,pobreza, by.x = "codigo_comuna", by.y = "Cod.Com")
+mapa$codigo_comuna <- as.factor(mapa$codigo_comuna)
+mapa$codigo_region <- as.numeric(mapa$codigo_region)
+```
+
+Creamos un objeto que contenga el nombre de las regiones (ordenadas por orden de region). Luego, graficamos la región seleccionada y establecemos el porcentaje de pobreza comunal como el "fill" de las comunas. Esto permite observar que comunas son más vulnerables dentro de una región.
+
+```{r ggplot 1}
+REGIONES1 <- unique(pobreza$Region)
+
+GRAFICO_1_REG <-
+  ggplot(data = mapa[codigo_region == params$reg,]) +
+  geom_sf(aes(geometry = geometry, fill = PORCPOBR)) +
+  xlab('Longitud') +
+  ylab('Latitud') +
+  labs(title = REGIONES1[params$reg], subtitle = 'Tasa de pobreza relativa comunal') +
+  scale_fill_continuous(trans = 'reverse', labels = scales::percent_format(suffix = "%"))
+
+GRAFICO_1_REG
+```
+
+Si bien el porcentaje de individuos pobres en cada comuna es relevante, este no deja de ser relativo al número total de personas que viven en dicha comuna. Si estubiesemos estudiando la distribución geográfica de los pobres en una región, pudiese ser más relevante saber el número de personas que son pobres, y no tanto el porcentaje (un 5% de pobres en Las Condes no es lo mismo que un 5% de pobres en Camarones). Por lo tanto, es necesario ajustar la variable de pobreza comunal (mejor crear una nueva variable).
+
+```{r merge 2}
+censo <- data.table(censo_2017_comunas)
+censo <- censo[,.(`Población` = sum(poblacion)), by = .(codigo_comuna)]
+mapa <- merge(mapa,censo, by = "codigo_comuna")
+mapa[, Pobres := `Población`*PORCPOBR]
+```
+
+Una vez trabajada la base, repetimos el proceso de mapeo y observamos las diferencias entre los valores relativos y absolutos.
+
+```{r ggplot 2}
+GRAFICO_2_REG <-
+  ggplot(data = mapa[codigo_region == params$reg,]) +
+  geom_sf(aes(geometry = geometry, fill = Pobres)) +
+  xlab('Longitud') +
+  ylab('Latitud') +
+  labs(title = REGIONES1[params$reg], subtitle = 'Tasa de pobreza absoluta comunal') +
+  scale_fill_continuous(trans = 'reverse')
+
+GRAFICO_2_REG
+```
+
+## AGREGANDO LOCALICAZACIÓN GEORREFERENCIADA DE ESTABLECIMIENTOS PÚBLICOS
+
+Supongamos que deseamos observar la distribución de hospitales y escuelas municipales de la región, de tal manera de ver si existe alguna tendencia a la existencia de estos según el número de pobres (o porcentaje de pobreza) de la comuna. Los datos pueden encontrarse en la pagina web de IDE Chile, la cual posee datos georeferenciados de múltiples aspectos territoriales (<http://www.ide.cl/index.php/informacion-territorial/descargar-informacion-territorial>).
+
+```{r datos salud y educacion, message = FALSE, include = FALSE}
+rbd <- st_read("Establecimientos_EdEscolar_Dic2019/Establecimientos_EdEscolar_Dic2019.shp")
+hospitales <-  st_read("HOSPITALES_SNSS_20190926/HOSPITALES_SNSS_20190926.shp")
+```
+
+Por temas simplemente estéticos, modificaremos el texto de las variables referentes a los nombres de las comunas, hospitales y establecimientos municipales (tendrá mayor uso cuando veamos la versión highcharter de los mapas).
+
+```{r ESTETICA DE NOMBRES, message = FALSE}
+hospitales$NOM_COMUNA <- toupper(hospitales$NOM_COMUNA) # Modificamos nombre de la comuna
+hospitales$NOMBRE <- toupper(hospitales$NOMBRE) # Modificamos nombre del hospital
+rbd$NOM_RBD <- toupper(rbd$NOM_RBD) # Modificamos nombre del establecimiento municipal
+rbd$DEPENDENCI <- tolower(rbd$DEPENDENCI) # Modificamos tipo de establecimiento educacional
+```
+
+Es dificil encontrar bases de datos sin errores y, en este caso, dichas bases no se encuentran libre de estos. Si uno omite el siguiente chunck notará que las localizaciones de los hospitales de ciertas regiones se encuentran desfazados de la ubicación geográfica que estamos graficando. Esto se debe a que hay errores de codificación de las regiones (que es con la variable que filtramos para graficar una sola region), lo cual genera que ciertas regiones grafiquen ubicaciones de establecimientos públicos de otras regiones. Corregimos dichos errores reasignando el código correcto a la región mediante la función "grepl" (permite buscar patrones de texto o números en variables o vectores). Notar que corregimos el código de las regiones mediante el nómbre de estas, dado que corregir mediante el mismo código llevaría a sobreescribir los datos previamente corregidos de otras regiones.
+
+```{r arreglando error en base}
+hospitales$COD_REGION[grepl("Arica",hospitales$NOM_REGION)] <- 15
+hospitales$COD_REGION[grepl("Antof",hospitales$NOM_REGION)] <- 2
+hospitales$COD_REGION[grepl("Ataca",hospitales$NOM_REGION)] <- 3
+hospitales$COD_REGION[grepl("Coqui",hospitales$NOM_REGION)] <- 4
+hospitales$COD_REGION[grepl("Valpa",hospitales$NOM_REGION)] <- 5
+hospitales$COD_REGION[grepl("Metro",hospitales$NOM_REGION)] <- 13
+hospitales$COD_REGION[grepl("Higgi",hospitales$NOM_REGION)] <- 6
+hospitales$COD_REGION[grepl("Maule",hospitales$NOM_REGION)] <- 7
+hospitales$COD_REGION[grepl("Biob",hospitales$NOM_REGION)] <- 8
+hospitales$COD_REGION[grepl("Arauc",hospitales$NOM_REGION)] <- 9
+hospitales$COD_REGION[grepl("Los R",hospitales$NOM_REGION)] <- 14
+hospitales$COD_REGION[grepl("Los L",hospitales$NOM_REGION)] <- 10
+hospitales$COD_REGION[grepl("Ays",hospitales$NOM_REGION)] <- 11
+hospitales$COD_REGION[grepl("Magal",hospitales$NOM_REGION)] <- 12
+hospitales$COD_REGION[grepl("uble",hospitales$NOM_REGION)] <- 16
+```
+
+Ahora quehemos modificado los errores, filtramos por aquellos establecimientos públicos de interés. En el caso de la base de datos de establecimientos de salud, supongamos que solo nos interesan los hospitales (servicios de salud). En el caso de los establecimientos de educación, solo nos interesan los establecimientos municipales.
+
+```{r filtrando}
+# Filtramos
+rbd <- rbd[rbd$COD_REGION == params$reg & rbd$DEPENDENCI == 'municipal',]
+hospitales <- hospitales[hospitales$COD_REGION == params$reg & hospitales$DEPENDENC == 'Servicio de Salud',]
+```
+
+En el caso de escuelas muncipales, notamos que la categoría "municial" puedes ser modificada a "Escuela Municipal". Para eso es necesario seleccionar la letra "M" de "municipal" y agregarle también el prefijo "Escuela".
+
+```{r una base}
+rbd$DEPENDENCI <- paste0(toupper(substr(rbd$DEPENDENCI,1,1)),substr(rbd$DEPENDENCI,2,nchar(rbd$DEPENDENCI)))
+rbd$DEPENDENCI <- paste0('Escuela ', rbd$DEPENDENCI)
+```
+
+Utilizamos la función rbind para generar una sola base que contenga: longitud, latitud y la categoría del establecimiento (Escuela Munciciapl o Servicios de Salud).
+
+```{r merge 3}
+names(rbd)[names(rbd) == "DEPENDENCI"] <- "DEPENDENC"
+base <- rbind(data.frame(rbd[,c('LONGITUD','LATITUD','DEPENDENC')]),data.frame(hospitales[,c('LONGITUD','LATITUD','DEPENDENC')]))
+```
+
+Agregamos los datos de las ubicación georreferenciadas al mapa regional de pogreza porcentual comunal.
+
+```{r ggplot 3}
+GRAFICO_3_REG <-
+  ggplot(data = mapa[mapa$codigo_region == params$reg,]) +
+  geom_sf(aes(geometry = geometry, fill = PORCPOBR)) +
+  geom_point(data = base, aes(x = LONGITUD, y = LATITUD, color = DEPENDENC, shape = DEPENDENC), size = 1.5) +
+  scale_fill_continuous(trans = 'reverse', labels = scales::percent_format(suffix = "%")) +
+  scale_color_manual(values = c('darkred','yellow')) +
+  labs(color = 'DEPENDENCIA', shape = 'DEPENDENCIA') +
+  xlab('Longitud') +
+  ylab('Latitud') +
+  labs(title = REGIONES1[params$reg], subtitle = 'Establecimientos de salud y educación municipal a 2019')
+  
+GRAFICO_3_REG
+```
+
+Nuevamente puede exisitir diferencias entre los valores relativos a la población y los valores absolutos de pobres en la comuna. Por lo tanto, graficamos nuevamente considerando el número de pobres totales de cada comuna.
+
+```{r ggplot 4}
+GRAFICO_4_REG <-
+  ggplot(data = mapa[mapa$codigo_region == params$reg,]) +
+  geom_sf(aes(geometry = geometry, fill = Pobres)) +
+  geom_point(data = base, aes(x = LONGITUD, y = LATITUD, color = DEPENDENC, shape = DEPENDENC), size = 1.5) +
+  scale_fill_continuous(trans = 'reverse') +
+  scale_color_manual(values = c('darkred','yellow')) +
+  labs(color = 'DEPENDENCIA', shape = 'DEPENDENCIA') +
+  xlab('Longitud') +
+  ylab('Latitud') +
+  labs(title = REGIONES1[params$reg], subtitle = 'Establecimientos de salud y educación municipal a 2019')
+
+GRAFICO_4_REG
+```
+
+
+## Grafico Highcharter
+Supongamos que sería util saber inmediatamente el nombre del establecimiento público, así tambien como ver el porcentaje de pobreza comunal y el número de pobres en un mismo gráfico. En ggplot eso podría ser un problema, puesto que siendo graficos estáticos, tener mucho texto en sectores con muchos establecimientos conglomerados (como ciudades) pudiese ser polo legible. Highcharter ofrece una posible solución, dada su capacidad de generar gráficos dinámicos.
+Primero modificamos los valores (los de pobreza comunal para expresarlos en porcentaje los de personas para expresarlos redondeados), de tal manera de ser más entendible el gráfico.
+
+```{r modificando valores, message = FALSE}
+mapa$Pobres <-round(mapa$Pobres)
+mapa$PORCPOBR <-mapa$PORCPOBR*100
+```
+
+Una de las condiciones para poder trabajar con mapas en highcharter es que el mapa ya no tiene que ser de clase "data.table", sino de clase "geojson" y luego ser transformado a lista (estoúltimo en el caso de la base que contenga los vectores para generar el gráfico). Los objetos que contengan bases de datos con ubicaciones georreferenciadas (como los hospitales y establecimientos de educación) deben ser formato "sf". Esto se puede hacer con los paquetes "jsonlite" y "geojsonio".
+
+```{r geoj, message = FALSE}
+mapa_hc <- st_as_sf(mapa) # aquí lo transformamos en clase sf (necesario para transformarlo en clase geojson)
+MAPA_hc <- st_as_sf(mapa[codigo_region == params$reg,])
+mapa_hc <- geojson_json(mapa_hc[mapa_hc$codigo_region == params$reg,]) # aquí lo transformamos en clase geojson
+mapa_hc <- jsonlite::fromJSON(mapa_hc, simplifyVector = FALSE) # aqui lo transformamos en lista
+  
+hosp_hc <- geojson_json(hospitales[hospitales$COD_REGION == params$reg & hospitales$DEPENDENC == 'Servicio de Salud',], lat = 'LATITUD', lon = 'LONGITUD')
+rbd_hc <- geojson_json(rbd[rbd$COD_REGION == params$reg & rbd$DEPENDENC == 'Escuela Municipal',], lat = 'LATITUD', lon = 'LONGITUD')
+```
+
+Una vez tenemos las bases de datos listas, generamos el grafico highcharter agregando los datos de pobreza comunal y número de pobres totales.
+
+```{r highcharter 1}
+GRAFICO_1_REG_hc <-
+  highchart(type = "map") %>%
+    hc_add_series_map(map = mapa_hc, df = MAPA_hc, value = "PORCPOBR", joinBy = "Comuna", name = "Pobreza Comunal") %>%
+    hc_tooltip(useHTML = TRUE, pointFormat = "{point.Comuna}: {point.PORCPOBR}% con {point.Pobres} personas") %>%
+    hc_title(text = REGIONES1[params$reg]) %>%
+    hc_subtitle(text = "Tasa de pobreza relativa comunal")
+
+GRAFICO_1_REG_hc
+```
+
+Repetimos el caso para el número de pobres totales de la comuna,de tal manera de observar nuevamente lo visot en el gráfico n°2 de la versión ggplot.
+
+```{r highcharter 2}
+GRAFICO_2_REG_hc <-
+  highchart(type = "map") %>%
+    hc_add_series_map(map = mapa_hc, df = MAPA_hc, value = "Pobres", joinBy = "Comuna", name = "Pobreza Comunal") %>%
+    hc_tooltip(useHTML = TRUE, pointFormat = "{point.Comuna}: {point.PORCPOBR}% con {point.Pobres} personas") %>%
+    hc_title(text = REGIONES1[params$reg]) %>%
+    hc_subtitle(text = "Tasa de pobreza absoluta comunal")
+
+GRAFICO_2_REG_hc
+```
+
+Si ahora deseamos agregar los datos de salud y educación, utilizamos la función "hc_add_series" fde highcharter. Notamos que, al ser dinámico, podemos seleccionar los datos de educación y salud por separado, o bien todo junto.
+
+```{r highcharter 3}
+GRAFICO_3_REG_hc <-
+  highchart(type = "map") %>%
+    hc_add_series_map(map = mapa_hc, df = MAPA_hc, value = "PORCPOBR", joinBy = "Comuna", name = "Pobreza Comunal") %>%
+    hc_tooltip(useHTML = TRUE, pointFormat = "{point.Comuna}: {point.PORCPOBR}% con {point.Pobres} personas") %>%
+    hc_add_series(data = rbd_hc, type = "mappoint", dataLabels = list(enabled = FALSE), name = "Escuela Municipal", tooltip = list(pointFormat = "{point.properties.NOM_RBD}")) %>%
+    hc_add_series(data = hosp_hc, type = "mappoint", dataLabels = list(enabled = FALSE), name = "Hospital", tooltip = list(pointFormat = "{point.properties.NOMBRE}")) %>%
+    hc_title(text = REGIONES1[params$reg]) %>%
+    hc_subtitle(text = "Establecimientos de salud y educación municipal a 2019")
+
+GRAFICO_3_REG_hc
+```
+
+Repetimos nuevamente, pero conciderando el número total de pobres (y no el relativo) como método de distribución de valores.
+
+```{r highcharter 4}
+GRAFICO_4_REG_hc <-
+  highchart(type = "map") %>%
+    hc_add_series_map(map = mapa_hc, df = MAPA_hc, value = "Pobres", joinBy = "Comuna", name = "Pobreza Comunal") %>%
+    hc_tooltip(useHTML = TRUE, pointFormat = "{point.Comuna}: {point.PORCPOBR}% con {point.Pobres} personas") %>%
+    hc_add_series(data = rbd_hc, type = "mappoint", dataLabels = list(enabled = FALSE), name = "Escuela Municipal", tooltip = list(pointFormat = "{point.properties.NOM_RBD}")) %>%
+    hc_add_series(data = hosp_hc, type = "mappoint", dataLabels = list(enabled = FALSE), name = "Hospital", tooltip = list(pointFormat = "{point.properties.NOMBRE}")) %>%
+    hc_title(text = REGIONES1[params$reg]) %>%
+    hc_subtitle(text = "Establecimientos de salud y educación municipal a 2019")
+
+GRAFICO_4_REG_hc
+```
