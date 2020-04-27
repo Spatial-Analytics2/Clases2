@@ -42,18 +42,30 @@ comunas_rm<-mapa_comunas[mapa_comunas$codigo_region==13,]
 
 comunas_rm<-merge(x = comunas_rm,y = COVID[`Codigo region`==13,],by.x="codigo_comuna",by.y="Codigo comuna",all.x=TRUE,sort=F)
 
+#declara un df como objeto sf 
+comunas_rm<-st_sf(comunas_rm)
+#sf-> sp
 comunas_rm<-as_Spatial(comunas_rm)
+#sp->sf
+#comunas_rm<- as(comunas_rm,'sf') 
 
 library(spdep)
 
+#solo trabaja con objetos tipo sp
 nbs<-poly2nb(comunas_rm,queen = T)
+nbs #desripcion o caracteristicas de los pesos espaciales
 
+#matriz de pesos
 w_rm<-nb2listw(nbs,style = "W")
+w_rm
+
 
 plot(comunas_rm)
 plot(nbs,coordinates(comunas_rm),add=T,col='blue',pch=".")
 
+#ver los vecinos espaciales de comunas_rm (rezago espacial)
 comunas_rm$Confirmados_2020.04.17_sl<-lag.listw(w_rm,comunas_rm$Confirmados_2020.04.17)
+
 
 plot(comunas_rm$Confirmados_2020.04.17,comunas_rm$Confirmados_2020.04.17_sl)
 identify(comunas_rm$Confirmados_2020.04.17,comunas_rm$Confirmados_2020.04.17_sl, comunas_rm$Comuna, cex = 0.8)
@@ -70,16 +82,18 @@ ggplot(comunas_rm@data,aes(x=Confirmados_2020.04.17,y=Confirmados_2020.04.17_sl)
 #### Local Moran
 
 locM<-localmoran(x = comunas_rm$Confirmados_2020.04.17,listw = w_rm)
+#me da un indice de asociación local (por cada unidad espacial) y si es significativa o no... a continuacion podria ver los promedios ponderados de todas las comunas:
 summary(locM)
 
+#rayas de medias en el maps
 meanConf<-mean(comunas_rm$Confirmados_2020.04.17)
 meanConf_sl<-mean(comunas_rm$Confirmados_2020.04.17_sl)
 
-comunas_rm$quad_sig <- 5
-comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 >= meanConf & comunas_rm$Confirmados_2020.04.17_sl >= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 1
-comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 <= meanConf & comunas_rm$Confirmados_2020.04.17_sl <= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 2
-comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 >= meanConf & comunas_rm$Confirmados_2020.04.17_sl <= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 3
-comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 >= meanConf & comunas_rm$Confirmados_2020.04.17_sl <= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 4
+comunas_rm$quad_sig <- 5 #no significativos (con significancia al 10%)
+comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 >= meanConf & comunas_rm$Confirmados_2020.04.17_sl >= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 1 # high high
+comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 <= meanConf & comunas_rm$Confirmados_2020.04.17_sl <= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 2 # low low
+comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 >= meanConf & comunas_rm$Confirmados_2020.04.17_sl <= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 3 # High Low
+comunas_rm@data[(comunas_rm$Confirmados_2020.04.17 >= meanConf & comunas_rm$Confirmados_2020.04.17_sl <= meanConf_sl) & (locM[, 5] <= 0.1), "quad_sig"] <- 4 #Low High
 
 # Set the breaks for the thematic map classes
 breaks <- seq(1, 5, 1)
