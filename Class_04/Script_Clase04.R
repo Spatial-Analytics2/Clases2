@@ -193,7 +193,7 @@ zonas_valparaiso<-mapa_zonas[mapa_zonas$codigo_region=="05",]
 
 zonas_valparaiso<-merge(zonas_valparaiso,codigos_territoriales[,c("codigo_comuna","nombre_comuna")],by="codigo_comuna",all.x=TRUE,sort=F)
 
-zonas_valparaiso<-zonas_valparaiso[zonas_valparaiso$codigo_comuna%in%c("05101","05109"),]
+zonas_valparaiso<-zonas_valparaiso[zonas_valparaiso$codigo_comuna%in%c("05101","05109","05103"),]
 
 zonas_valparaiso<-merge(zonas_valparaiso,poblacion_adulto_mayor_zonas,by="geocodigo",all.x=TRUE,sort=F)
 
@@ -203,7 +203,7 @@ library(RColorBrewer)
 paleta <- rev(brewer.pal(n = 9,name = "Reds"))
 
 
-
+library(ggplot2)
 ggplot(zonas_valparaiso) + 
   geom_sf(aes(fill = AdultosMayores, geometry = geometry)) +
   scale_fill_gradientn(colours = rev(paleta), name = "Poblacion\nadulto mayor") +

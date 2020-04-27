@@ -164,13 +164,22 @@ R_cont<-ggplot(comunas_rm) +
 
 # Mapping Rates - Changing the population at Risk
 
-ODRM<-readRDS("Class_05/ConmutacionRM.rds")
+ODRM<-readRDS("otros_datos/ConmutacionRM.rds")
 class(ODRM)
 View(ODRM)
 View(comunas_rm)
 names(ODRM)
 names(ODRM)<-c("destino",'origen','Total')
 
+library(circlize)
+library(chorddiag)
+# Creamos matriz de conmutación, donde las filas representan en qué comuna viven y las columna en que columna trabajan:
+
+MATRIZ_OD_RM <- with(ODRM, tapply(Total, list(destino,origen), FUN=sum))
+
+MATRIZ_OD_RM[is.na(MATRIZ_OD_RM)] <- 0 # Cambiamos NAs de las matrices por 0s.
+
+chorddiag(MATRIZ_OD_RM[-44,], type = "directional")
 
 Trabajadores_origen<-ODRM[,.(Trab_origen=sum(Total,na.rm = T)),by=.(origen)]
 
@@ -203,6 +212,7 @@ trab_jenks_o<-ggplot(comunas_rm) +
   scale_fill_brewer(palette = "YlOrBr")+
   labs(title = "Trabajadores por Origen", subtitle = "Región Metropolitana - 2020-04-08") +
   theme_minimal(base_size = 11)
+trab_jenks_o
 
 # Natural Breaks (Jenks) - Trabajadores por Destino
 breaks_jenks_d <- classIntervals(comunas_rm$Trab_destino, n = 5, style = "jenks")
@@ -214,7 +224,7 @@ trab_jenks_d<-ggplot(comunas_rm) +
   scale_fill_brewer(palette = "YlOrBr")+
   labs(title = "Trabajadores por Destino", subtitle = "Región Metropolitana - 2020-04-08") +
   theme_minimal(base_size = 11)
-
+trab_jenks_d
 
 # Risk by origen
 
@@ -232,6 +242,7 @@ R_cont_TO<-ggplot(comunas_rm) +
                        high = div_pal[1],name = "Tasa Relativa",midpoint=1) +
   labs(title = "Tasa Relativa de Riesgo - Trabajadores Origen", subtitle = "Región Metropolitana - 2020-04-08") +
   theme_minimal(base_size = 11)
+R_cont_TO
 
 # Risk by destino
 

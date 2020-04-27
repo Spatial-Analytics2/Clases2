@@ -7,7 +7,7 @@
 
 # Spatial randomness
 
-install.packages('plot.matrix')
+#install.packages('plot.matrix')
 library(plot.matrix)
 library(classInt)
 
@@ -29,6 +29,7 @@ library(data.table)
 archivos<-dir(path = "Class_06/producto2/")
 COVID<-fread(input =paste0("Class_06/producto2/",archivos[1]))
 names(COVID)[6]<-paste0("Confirmados_",substr(archivos[1],start = 1,stop = 10))
+
 for(i in 2:length(archivos)){
   aa<-fread(input =paste0("Class_06/producto2/",archivos[i]))
   aa<-aa[,.(`Codigo comuna`,`Casos Confirmados`)]
