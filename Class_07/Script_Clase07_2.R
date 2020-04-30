@@ -139,6 +139,7 @@ leaflet(spgons) %>%
 #saveRDS(bikeShops,"bikeShopsStgo.rds")
 
 bikeShops<-readRDS("Class_07/bikeShopsStgo.rds")
+str(bikeShops)
 bikeShops$store_lat<-as.numeric(bikeShops$store_lat)
 bikeShops$store_lon<-as.numeric(bikeShops$store_lon)
 
@@ -169,3 +170,7 @@ leaflet(marketAreas) %>%
   addPolygons(data = spgons,color = heat.colors(NLEV, NULL)[LEVS])%>%
   addCircleMarkers(lng = biciMapStgo@coords[,1],lat=biciMapStgo@coords[,2],color = "grey",fillColor = "grey",radius = 0.001)
 
+
+library(readstata13)
+
+baseEODValpo<-data.table(read.dta13("Class_07/Data_EOD_GV/Base_Valparaiso_sample2play.dta"))
