@@ -5,7 +5,7 @@ output:
   theme: cosmo
   
 params:
-  reg:  3
+  reg:  13
 ---
 
 ```{r CREAMOS PARAMETROS,include=FALSE}

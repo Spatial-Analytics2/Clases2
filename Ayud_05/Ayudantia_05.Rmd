@@ -1,0 +1,253 @@
+---
+title: "Introducción a Googleway y Nominatim"
+author: "Martín Sielfeld"
+date: "30-04-2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r paquetes}
+#devtools::install_github("hrbrmstr/nominatim")  # No es necesario que lo instale ahora
+library(googleway)
+library(data.table)
+library(nominatim)
+library(tidyverse)
+library(leaflet)
+library(REAT)
+library(chilemapas)
+library(sp)
+```
+
+Antes de comenzar, es necesario indicar que para poder utilizar las fuciones del paquete googleways es necesario habilitar ciertas funciones en el proyecto del cual se extrajo la API. En esta ayudantía utilizaremos tres funciones de googleways: "google_places", "goolge_geocode" y "google_distance". Para habilitar dichas funciones en su proyecto, vaya al siguiente link (<https://console.cloud.google.com/google/maps-apis/start>) en su cuenta > vaya al menú que aparece en la esquina superior izquierda > APIs y servicios > Biblioteca. En dicha página aparecerá en la mitad derecha de la página una opción que dice "Ver Todas (15)" y haga click ahí. Las opciones que debe de habilitar son "Geolocation API", "Distance Matrix API" y "Places API".
+Para obtener la API volvemos al Menú principal > APIs y servicios > Credenciales. Copiamos el código de la API de nuestro proyecto (si tiene más de una API en dicho proyecto selecciona cualquiera) y volvemos a R. Creamos un objeto con el código de la API y seleccionamos que funciones estáran disponibles con dicha API (la función "set_key" permite ingresar una sola vez por sesión la API y en las funciones leerá automaticamente dicha key). Esto permite no ir agregando cada vez la clave API en cada función.
+
+```{r }
+api_key <- "AIzaSyBsfZ9i2RwfLJrGAd5MZXFr1dyEGynyxiY"
+set_key(key = api_key)
+google_keys()
+```
+
+Lo anterior determina como default que la API será automática para cualquier función de googleways. Si deseamos que solo ciertas funciones están disponibles con dicha API, seleccionamos aquellos servicios que si necesitaremos:
+
+```{r pressure, echo=FALSE}
+api_key <- # Agregar API
+set_key(key = api_key, api = "geocode")
+set_key(key = api_key, api = "places")
+set_key(key = api_key, api = "distance")
+google_keys()
+```
+
+Supongamos que estamos saliendo de la Biblioteca nacional tras devolver un libro. Son las 14:00 hrs y nos da hambre, por lo que deseamos ver que locales hace cerca de la biblioteca para almorzar. Para eso necesitaremos primero la localización geográfica (lon - lat) de la bilbioteca para utilizarla de referencia. Esto se puede hacer en base a la función "google_geocode":
+
+```{r farmacias RM}
+#B_nacional <- google_geocode(key = api_key, address = "Biblioteca Nacional de Chile" , language = "es")
+B_nacional <- readRDS("B_nacional.rds")
+View(B_nacional$results)
+```
+
+Notar que los resultados de la busqueda se entregan en formato lista, así también como que entrega mucho más información de la necesaria. Una vez obtenida la latitud y longitud de nuestr ubicación, utilizamos dichos datos como referencia para encontrar restaurantes (palabra clave) en un radio cercano de 500 metros:
+
+```{r farmacias RM}
+#restaurantes <- google_places(search_string = "Restaurantes", key = api_key, location = c(-33.44206,-70.64573), language = "es", radius = 500)
+restaurantes <- readRDS("restaurantes.rds")
+View(restaurantes$results)
+
+#restaurantes_2 <- google_places(search_string = "Restaurantes", key = api_key, location = c(-33.44206,-70.64573), language = "es", radius = 500, page_token = restaurantes$next_page_token)
+restaurantes_2 <- readRDS("restaurantes_2.rds")
+View(restaurantes_2$results)
+
+#restaurantes_3 <- google_places(search_string = "Restaurantes", key = api_key, location = c(-33.44206,-70.64573), language = "es", radius = 500, page_token = restaurantes_2$next_page_token)
+restaurantes_3 <- readRDS("restaurantes_3.rds")
+View(restaurantes_3$results)
+```
+
+Notar que la busqueda arroja 20 resultados, pero en caso de necesitar más datos volvemos a solicitar la busqueda con el argumento "page_token = x$next_page_token". Esto nos dará los siguientes 20 resultados. Notar que dicho radio de 500 metros no es exacto, puesto que pueden ser poco más de esto. Si uno continua haciendo búsquedas, los resutlados comienzan a alejarse del centro de referencia.
+Algo muy importante es que, una vez hecha la busqueda, es recomendable guardar inmediatamente la información antes de trabajar con esta. Esto, con la intención de no tener que hacer nuevamente la busqueda y perder parte de los $300 dolares.
+
+```{r save data}
+saveRDS(B_nacional, "B_nacional.rds")
+saveRDS(restaurantes, "restaurantes.rds")
+saveRDS(restaurantes_2, "restaurantes_2.rds")
+saveRDS(restaurantes_3, "restaurantes_3.rds")
+```
+
+Con el paquete "leaflet" graficamos primero nuestra ubicación y el radio de 500 metros en donde debiesen de estár los 60 locales encontrados:
+
+```{r holi}
+leaflet(B_nacional$results) %>% 
+  addTiles() %>%
+  addMarkers(lat = B_nacional$results$geometry$location$lat, lng = B_nacional$results$geometry$location$lng, popup = "Biblioteca Nacional de Chile") %>%
+  addCircles(lat = B_nacional$results$geometry$location$lat, lng = B_nacional$results$geometry$location$lng, weight = 1, radius = 500)
+```
+
+Agregamos los datos de las ubicaciones de los restaurantes, de tal manera de ver si realmente todos caen en los 500 metros deseados:
+
+```{r holi}
+leaflet() %>% 
+  addTiles() %>%
+  addMarkers(B_nacional$results, lat = B_nacional$results$geometry$location$lat, lng = B_nacional$results$geometry$location$lng, popup = "Biblioteca Nacional de Chile") %>%
+  addMarkers(restaurantes$results, lat = restaurantes$results$geometry$location$lat, lng = restaurantes$results$geometry$location$lng, popup = restaurantes$results$name) %>%
+  addMarkers(restaurantes_2$results, lat = restaurantes_2$results$geometry$location$lat, lng = restaurantes_2$results$geometry$location$lng, popup = restaurantes_2$results$name) %>%
+  addMarkers(restaurantes_3$results, lat = restaurantes_3$results$geometry$location$lat, lng = restaurantes_3$results$geometry$location$lng, popup = restaurantes_3$results$name) %>%
+  addCircles(lat = B_nacional$results$geometry$location$lat, lng = B_nacional$results$geometry$location$lng, weight = 1, radius = 500)
+```
+
+Para comparar los locales de que busqueda se encuentran dentro de dichos 500 metros, cambiamos los colores y simbolos de los marcadores en el mapa. Más detalles sobre como editar dichos íconos pueden encontrarse en <https://github.com/lvoogdt/Leaflet.awesome-markers>.
+
+```{r holi}
+color_r <- makeAwesomeIcon(icon= 'flag', markerColor = 'blue', iconColor = 'black')
+color_r_2 <- makeAwesomeIcon(icon = 'flag', markerColor = 'red', iconColor = 'black')
+color_r_3 <- makeAwesomeIcon(icon = 'flag', markerColor = 'purple', iconColor = 'black')
+color_b <- makeAwesomeIcon(icon = 'bookmark', markerColor = 'green', iconColor = 'black')
+```
+
+Cambiamos la función "addMarkers" por "addAwsomeMarkers" para hacer compatible con la función "makeAwsomeIcon" previamente utilizadas:
+
+```{r a}
+leaflet() %>% 
+  addTiles() %>%
+  addAwesomeMarkers(B_nacional$results, lat = B_nacional$results$geometry$location$lat, lng = B_nacional$results$geometry$location$lng, popup = "Biblioteca Nacional de Chile", icon = color_b) %>%
+  addAwesomeMarkers(restaurantes$results, lat = restaurantes$results$geometry$location$lat, lng = restaurantes$results$geometry$location$lng, popup = restaurantes$results$name, icon = color_r) %>%
+  addAwesomeMarkers(restaurantes_2$results, lat = restaurantes_2$results$geometry$location$lat, lng = restaurantes_2$results$geometry$location$lng, popup = restaurantes_2$results$name, icon = color_r_2) %>%
+  addAwesomeMarkers(restaurantes_3$results, lat = restaurantes_3$results$geometry$location$lat, lng = restaurantes_3$results$geometry$location$lng, popup = restaurantes_3$results$name, icon = color_r_3)
+```
+
+## Distancia euclidiana vs. manhattan
+
+Supongamos que tenemos mucha hambre, por lo que una de las caracterísitcas que debe de tener el local que estamos buscando es que no esté muy lejos. Por lo tanto, deseamos saber la distancia que hay que recorrer para llegar a cada local. Existen dos manera de calcular dicha distancia (si asumimos que la tierra es plana):
+
+- Distancia euclideana: esta se calcula como la hipotenusa de un triangulo rectángulo, en donde solo se necesitan dos puntos (con latitud y longitud) para obtener la distancia.
+
+- Distancia manhattan: nos dice que la distancia entre dos puntos/coordenadas es la suma de las diferencias absolutas de sus coordenadas. Observamos que google_distance hace algo similar, puesto que calcula la distancia no linal (pero google tiene en consideración los caminos disponibles y obstaculos).
+
+Comparemos la diferencia que se produce entre la distancia euclideana y manhattan, de tal manera de seleccionar de mejor manera nuestro restaurante. Primero uniremos todas las bases de restaurantes en una sola para tener todo en una sola base de datos:
+
+```{r cbind 1}
+r_1 <- cbind(restaurantes$results$formatted_address,restaurantes$results$geometry$location$lat,restaurantes$results$geometry$location$lng,restaurantes$results$name,restaurantes$results$rating)
+r_2 <- cbind(restaurantes_2$results$formatted_address,restaurantes_2$results$geometry$location$lat,restaurantes_2$results$geometry$location$lng,restaurantes_2$results$name,restaurantes_2$results$rating)
+r_3 <- cbind(restaurantes_3$results$formatted_address,restaurantes_3$results$geometry$location$lat,restaurantes_3$results$geometry$location$lng,restaurantes_3$results$name,restaurantes_3$results$rating)
+
+restaurantes_60 <-data.table(rbind(r_1,r_2,r_3))
+names(restaurantes_60) <- c("address", "lat", "lng", "name", "rating")
+```
+
+Notar que google entrega los datos de longitud y latitud como clase "character", por lo que para utilzarlos en una expresión matemática es necesario modificar dichos valores a numéricos:
+
+```{r arreglando coordenadas}
+restaurantes_60$lat <- as.numeric(restaurantes_60$lat)
+restaurantes_60$lng <- as.numeric(restaurantes_60$lng)
+```
+
+Agregamos los datos de la ubicación georreferenciada de donde nos encontramos, de tal manera de calcular los datos:
+
+```{r cbind 2}
+Biblioteca <- data.table(B_nacional$results)
+restaurantes_60 <- cbind(restaurantes_60,Biblioteca = Biblioteca$formatted_address,lat_B = Biblioteca$geometry.viewport.northeast.lat,lng_B = Biblioteca$geometry.viewport.northeast.lng)
+```
+
+Con ayuda del paquete REAT calculamos la distancia euclideana ajustada en metros (previamente se calcula "a mano" para ejemplificar el problema de utilizar la fórmla clásica):
+
+```{r dist euclideana}
+restaurantes_60[, `Distancia euclideana a mano` := ((lat-lat_B)^2+(lng-lng_B)^2)^(0.5)]
+restaurantes_60[, `Distancia euclideana` := dist.calc(lat1 = lat, lat2 = lat_B, lon1 = lng, lon2 = lng_B, unit = "m")]
+```
+
+Para calcular distancia manhattan podemos utilizar la función "google_distance", la cual necesita un origen y uno (o más) destinos, en donde se calcula la distancia que se necesita recorrer, el tiempo necesario, el medio por el cual uno se desea movilizar, entre otras cosas. Dado que nodeseamos movernos más de 500 metros, agregamos la opción de ir caminando:
+
+```{r dis manhattan}
+#dis_google <- google_distance(destination = restaurantes_60$address ,origins = restaurantes_60$Biblioteca[1], units = "metric", language = "es", mode = "walking", key = api_key)
+dis_google <- readRDS("dis_google.rds")
+View(dis_google$rows$elements[[1]])
+```
+
+Guardamos nuevamente los datos (recomendado):
+
+```{r guardando manhattan}
+saveRDS(dis_google,"dis_google.rds")
+```
+
+Agregamos los datos (que están en orden de busqueda según el orden de los locales previamente buscados)
+
+```{r cbind 3}
+dis_manhattan <- dis_google$rows$elements[[1]]
+distancias <- cbind(restaurantes_60,dis_manhattan)
+names(distancias)[12] <- "Distancia manhattan"
+```
+
+Supongamos que, como nos fue bien en una prueba dificil, deseamos darnos un lujo. Por lo tanto, otro de los parámetros para ecoeger un local será que la calificación de este sea mayor a 4.5 estrellas. Comparamos entonces cual es, segun distancia euclideana y manhattan, cual es el local más cerca en cada caso:
+
+```{r almuerzo}
+ratings <- distancias[rating> 4.5,]
+ratings[`Distancia euclideana` == min(`Distancia euclideana`),.(name,`Distancia euclideana`)]
+ratings[`Distancia manhattan` == min(`Distancia manhattan`),.(name,`Distancia manhattan`)]
+```
+
+Graficamos dichos locales:
+
+```{r comparacion}
+leaflet() %>% 
+  addTiles() %>%
+  addAwesomeMarkers(B_nacional$results, lat = B_nacional$results$geometry$location$lat, lng = B_nacional$results$geometry$location$lng, popup = "Biblioteca Nacional de Chile", icon = color_b) %>%
+  addAwesomeMarkers(ratings[1], lat = ratings$lat[1], lng = ratings$lng[1], popup = ratings$name[1], icon = color_r) %>%
+  addAwesomeMarkers(ratings[3], lat = ratings$lat[3], lng = ratings$lng[3], popup = ratings$name[3], icon = color_r_2)
+```
+
+Notar inconsistencia de vistancia euclideana por no considerar valores absolutos de las latitudes y longitudes.
+
+## Una alternativa a googleways: paquete nominatim
+
+Un medio, en caso de no desear utilizar googleways por temor a algún cobro no acordado en la tarjeta, es utilizar los datos disponibles en OpenStreetMap. Por medio del paquete nominatim, se pueden obtener datos georreferenciados de lugares (al igual que con googleways). Para obtener una clave ("key") para acceder a dicho paquete, es necesario crear una cuenta en Mapquest Developer (<https://developer.mapquest.com>). Existen beneficios de 14.000 busquedas mensauales sin necesidad de agregar datos de tarjeta.
+
+Se adjunta pagina web con mayores detalles del paquete y las funciones disponibles (<https://www.r-bloggers.com/introducing-the-nominatim-geocoding-package/>). Por medio de la función "osm_search", se puede acceder a la base de datos de OpenStreetMap con los datos georreferenciados del string que estamos buscando. Repitiendo la busqueda de en donde me encuentro (biblioteca nacional):
+
+```{r nominatim}
+#B_nacional_2 <- osm_search("Biblioteca Nacional de Chile, Santiago, Chile", limit=20, key = "AaZKbR2MScvFTOfZ99DQdDPyrPeV7d99")
+B_nacional_2 <- readRDS("B_nacional_2.rds")
+B_nacional_2 <- glimpse(B_nacional_2)
+saveRDS(B_nacional_2,"B_nacional_2.rds")
+```
+
+Graficamos el segundo resultado (que es equivalente al encontrado con "google_places"). Notar que OpenStreetMap difiere del número de resultados que se entregan con la misma búsqueda que hicimos para "google_places" (diferentes bases de datos):
+
+```{r mapa nominatim 1}
+leaflet(data = B_nacional_2[2,]) %>% 
+  addTiles() %>%
+  addMarkers(~lon, ~lat, popup = ~display_name) %>%
+  addCircles(lng = ~lon, lat = ~lat, weight = 1, radius = 500)
+```
+
+Buscamos nuevamente un total de 60 restaurantes cercanos a la Biblioteca Nacional. Notar el método diferente de búsqueda para buscar restaurantes cerca de la biblioteca nacional:
+
+```{r dsdf}
+#restaurantes_4 <- osm_search("restaurants near biblioteca Nacional de Chile, Santiago, Chile", limit=60, key = "AaZKbR2MScvFTOfZ99DQdDPyrPeV7d99")
+restaurantes_4 <- readRDS("restaurantes_4.rds")
+restaurantes_4 <- glimpse(restaurantes_4)
+saveRDS(restaurantes_4,"restaurantes_4.rds")
+View(restaurantes_4)
+```
+
+Una observacion del control 1 es que muchos no lograron agregar polígonos a los mapas de leaflet (pregunta 9). Solo a modo de ejemplo, supongamos que deseamos enmarcar el territorio que pertenece a la comuna de Santiago (en donde se encuentra la Biblioteca Nacional). Utilizamos el paquete chilemapas para esto:
+
+```{r mapa}
+mapa <- mapa_comunas
+mapa<- mapa[mapa$codigo_comuna == "13101",]
+```
+
+Volvemos a graficar, agregando los limites comunales, los datos de restaurantes y nuestra ubicación actual:
+
+```{r holi}
+mapa <- st_sf(mapa) # Mapa tiene que ser clase sf
+st_crs(mapa)
+mapa <- st_transform(mapa,crs = "+proj=longlat +datum=WGS84")
+
+leaflet(mapa) %>% 
+  addTiles() %>%
+  addPolygons(fillColor = NULL, weight = 2) %>%
+  addAwesomeMarkers(B_nacional_2, lat = B_nacional_2$lat, lng = B_nacional_2$lon, popup = "Biblioteca Nacional de Chile", icon = color_b) %>%
+  addAwesomeMarkers(restaurantes_4, lat = restaurantes_4$lat, lng = restaurantes_4$lon, popup = restaurantes_4$display_name, icon = color_r)
+```
+
