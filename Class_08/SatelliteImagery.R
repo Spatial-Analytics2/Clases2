@@ -16,7 +16,10 @@ sapply(packages,FUN = require,character.only=T)
 #install.packages('RStoolbox')
 
 #cargando datos
-path<- paste0(getwd(),"/Class_08/LC08_L1TP_001076_20180228_20180308_01_T1/")
+path<- "/Users/estebanlopezochoa/Dropbox/Documents/005 Teaching/007 Workshops/002 DataScience and RegionalScience/01 SatelliteImagery/LC08_L1TP_001076_20180228_20180308_01_T1/"
+
+dir(path)
+#path<- paste0(getwd(),"/Class_08/LC08_L1TP_001076_20180228_20180308_01_T1/")
 files <- list.files(path,pattern=glob2rx("LC08*.TIF"), full.names = T)
 sat<-satellite(files)
 
@@ -35,6 +38,7 @@ pan<-raster(files[10])
 names(sat) 
 nlayers(sat)
 res(sat)
+res(pan)
 ncell(sat)
 dim(sat)
 

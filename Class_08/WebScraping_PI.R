@@ -101,8 +101,8 @@ precio <- urlprop %>%
   #setting data storage
   departamentos_arriendo<-NULL
   
-  #scraping departamentos # 25 paginas
-  for(j in 1:25){
+  #scraping departamentos # 8 paginas
+  for(j in 1:8){
     url<-paste0('https://www.portalinmobiliario.com/arriendo/departamento/antofagasta-antofagasta?ca=3&ts=1&mn=1&or=&sf=1&sp=0&at=0&pg=',j)  
     
     #extracting links of all pages
