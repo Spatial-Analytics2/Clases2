@@ -7,7 +7,7 @@ Tabla_19_19 <- data.table(readRDS(file = "Ayud_03/Tabla_19_19.rds"),stringsAsFac
 
 ## A continuación, se genera matriz origen-destino laborales en la quinta región (sin separar por industria):
 
-  BASE_OD_RM <- data.table(Tabla_19_19[ano_trimestre == 2020 & 
+  BASE_OD_R5 <- data.table(Tabla_19_19[ano_trimestre == 2020 & 
                                     mes_central == 1 & 
                                     cae_general_red == "Ocupados" & 
                                     (b18_codigo %between% c(13000,13999) | ## nos quedamos con todos los que viven en la RM 
