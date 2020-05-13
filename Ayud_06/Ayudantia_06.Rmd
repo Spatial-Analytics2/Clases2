@@ -252,13 +252,13 @@ leaflet(Restaurantes2) %>%
 Si bien es buena idea analizar la conglomeración espacial de la competencia, no es el único parámetro util para decidir donde establecer el local. Un segundo factor es la densidad poblacional. Si bien no tenemos los datos espaciales de las personas a nivel individual, se puede hacer una aproximación a nivel manzana con los datos a nivel manzana entregadas por el INE (obtenidas del Censo). Los datos se pueden obtener de: <http://geoine-ine-chile.opendata.arcgis.com/datasets/54e0c40680054efaabeb9d53b09e1e7a_0/data>. A su vez, de la misma página web se pueden obtener los shapefiles de las manzanas:  <http://geoine-ine-chile.opendata.arcgis.com/datasets/589bb9676dc04a18b2dced0d4b9043bf_117/data?geometry=-72.511%2C-33.237%2C-70.659%2C-32.834>. Por lo tanto, si hacemos un merge entre ambas bases podemos establecer la densidad poblacional a nivel manzana de Viña del Mar:
 
 ```{r educación, echo=F}
-personas <- data.table(st_read("db16512a-0cbd-4d34-8d69-99e1988b064e2020328-1-n9kghv.3x70s/db16512a-0cbd-4d34-8d69-99e1988b064e2020328-1-n9kghv.3x70s.shp"))
-personas <- personas[ZONA_CENSA %between% c(1,4) & CODIGO_DIS %in% c(1,2,3,8,9) & CUT == 5109,]
+personas <- data.table(readRDS("personas.rds"))
+personas <- personas[ZONA_CENSAL %between% c(1,4) & CODIGO_DISTRITO %in% c(1,2,3,8,9) & CUT == 5109,]
 
 manzanas <- data.table(st_read("a228fe7c-d77b-421c-9a12-2ac9acc733c0202048-1-18kt26f.m26f/a228fe7c-d77b-421c-9a12-2ac9acc733c0202048-1-18kt26f.m26f.shp"))
 manzanas <- manzanas[COD_LOCALI %between% c(1,4) & COD_DISTRI %in% c(1,2,3,8,9) & CUT == 5109,]
 
-base <- merge(manzanas, personas[,.(MANZENT,TOTAL_PERS)], by.x = "MANZENT_I",by.y = "MANZENT")
+base <- merge(manzanas, personas[,.(MANZENT,TOTAL_PERSONAS)], by.x = "MANZENT_I",by.y = "MANZENT")
 ```
 
 Los datos de comuna, distrito, zona y manzana pueden ser encontrado en la página web del INE o bien en <https://www.arcgis.com/apps/webappviewer/index.html?id=bc3cfbd4feec49699c11e813ae9a629f>. Transformamos la base a clase sf para mapear en leaflet:
@@ -272,12 +272,12 @@ base_lf <- st_transform(base_lf,crs = "+proj=longlat +datum=WGS84")
 Creamos los polígonos de las manzanas, en donde el "fill" será el número de personas que posee la manzana según el censo del 2017 (densidad poblacional):
 
 ```{r leaflet 5, echo=F}
-pal <- colorBin("YlOrRd", domain = base$TOTAL_PERS)
+pal <- colorBin("YlOrRd", domain = base$TOTAL_PERSONAS)
 
 leaflet(base_lf) %>% 
   addTiles() %>%
-  addPolygons(fillColor = ~pal(TOTAL_PERS), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~TOTAL_PERS) %>%
-  addLegend(pal = pal, values = ~TOTAL_PERS, opacity = 1,position = "bottomright",title = "Personas")
+  addPolygons(fillColor = ~pal(TOTAL_PERSONAS), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~TOTAL_PERSONAS) %>%
+  addLegend(pal = pal, values = ~TOTAL_PERSONAS, opacity = 1,position = "bottomright",title = "Personas")
 ```
 
 Sería buena estrategia ver como la cometencia de distribuye de acuerdo a la densidad pobacional (lo que nos puede ayudar a entender que motiva a las empresas a escoger dichas locaciones):
@@ -288,7 +288,7 @@ leaflet() %>%
   setView(-71.551, -33.019, zoom = 14) %>%
   addMapPane("ames_polygon", zIndex = 310) %>%
   addMapPane("ames_heatmap", zIndex = 420) %>%
-  addPolygons(data = base_lf,fillColor = ~pal(TOTAL_PERS), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~TOTAL_PERS, options = pathOptions(pane = "ames_polygon")) %>%
+  addPolygons(data = base_lf,fillColor = ~pal(TOTAL_PERSONAS), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~TOTAL_PERSONAS, options = pathOptions(pane = "ames_polygon")) %>%
   addHeatmap(data = Restaurantes2,lng = ~geometry.location.lng, lat = ~geometry.location.lat, blur = 10, max = 0.001, radius = 10) %>%
-  addLegend(data = base_lf, pal = pal, values = base_lf$TOTAL_PERS, opacity = 1,position = "bottomright",title = "Personas") 
+  addLegend(data = base_lf, pal = pal, values = base_lf$TOTAL_PERSONAS, opacity = 1,position = "bottomright",title = "Personas") 
 ```
