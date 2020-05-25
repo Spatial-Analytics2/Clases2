@@ -1,0 +1,294 @@
+---
+title: "Repaso gráficos, googleway y otros"
+author: "Martín Sielfeld"
+date: "14-05-2020"
+output: html_document
+
+params:
+  reg:  13
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r paquetes, warning=f, message=F, echo=F}
+library(googleway)
+library(data.table)
+library(tidyverse)
+library(leaflet)
+library(leaflet.extras)
+library(REAT)
+library(chilemapas)
+library(sp)
+library(classInt)
+```
+
+```{r CREAMOS PARAMETROS,include=FALSE}
+reg <- params$reg
+```
+
+## Repaso de mapeo en ggplot2 y leaflet
+Anteriormente trabajamos con datos de establecimientos municipales. Recordar que los datos pueden ser descargados de IDE Chile (<http://www.ide.cl/index.php/informacion-territorial/descargar-informacion-territorial>). Tambien recordar que, en caso de dudas con el paquete leaflet, se puede visitar su página web: <https://rstudio.github.io/leaflet/>.Generaremos distíntos gráficos de interés, de tal manera de brindar distintas herramientas de análisis. Filtraremos primero para la región de interés:
+
+```{r educación, echo=F}
+rbd <- data.table(st_read("Establecimientos_EdEscolar_Dic2019/Establecimientos_EdEscolar_Dic2019.shp"))
+rbd <- rbd[COD_REGION == params$reg,]
+```
+
+Creemos primero un choropleto que muestre el número de colegios (sean municipales, subvencionados o privados) de la región por comunas. Haremos la versión para ggplot2 y leaflet:
+
+```{r chilemapas, echo=F}
+mapa <- data.table(mapa_comunas)
+mapa <- mapa[codigo_region == params$reg,]
+mapa$codigo_comuna <- as.numeric(mapa$codigo_comuna) # para hacer merge
+```
+
+Contamos el número de establecimientos por comuna:
+
+```{r contar, echo=F}
+rbd2 <- rbd[,.N, by = .(COD_COM,COMUNA)] # Por cada COD_COM hay una COMUNA, por lo que no cambia el colapso
+escuelas <- merge(mapa,rbd2, by.x = "codigo_comuna", by.y = "COD_COM")
+```
+
+Graficamos para ggplot2:
+
+```{r ggplot 1, echo=F}
+GRAFICO_1_REG <-
+  ggplot(data = escuelas) +
+  geom_sf(aes(geometry = geometry, fill = N)) +
+  xlab('Longitud') +
+  ylab('Latitud') +
+  labs(title = paste("Región",params$reg), subtitle = 'Número de estabelcimientos educacionales') +
+  scale_fill_continuous(trans = 'reverse')
+
+GRAFICO_1_REG
+```
+
+Recordar que, para el caso de leaflet, es necesario transformar la base nuevamente a clase sf. Por lo tanto:
+
+```{r sf, echo=F}
+mapa_lf <- st_sf(escuelas) # Mapa tiene que ser clase sf
+st_crs(mapa_lf)
+mapa_lf <- st_transform(mapa_lf,crs = "+proj=longlat +datum=WGS84")
+```
+
+Graficamos para leaflet:
+
+```{r leaflet 1, echo=F}
+pal <- colorBin("YlOrRd", domain = mapa_lf$N)
+
+leaflet(mapa_lf) %>% 
+  addTiles() %>%
+  addPolygons(fillColor = ~pal(N), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~COMUNA)
+```
+
+Recorar que si existe una disperción de los datos muy homogenea puede costar ver la diferencia de colores entre comunas, dado que estamos utilizando una categoría continua como "fill" de las comunas. Podría ser buena idea agregar una variable categórica que permita diferenciar de mejor manera entre comunas:
+
+```{r breaks, echo=F}
+breaks_quantile = classIntervals(escuelas$N, n= 5, style = "quantile")
+escuelas$quantile = cut(escuelas$N,breaks = breaks_quantile$brks, include.lowest = T)
+```
+
+Graficamos nuevamente para ggplot2:
+
+```{r ggplot 2, echo=F}
+GRAFICO_2_REG <-
+  ggplot(data = escuelas) +
+  geom_sf(aes(geometry = geometry, fill = quantile)) +
+  scale_fill_brewer(palette = "OrRd") +
+  xlab('Longitud') +
+  ylab('Latitud') +
+  labs(title = paste("Región",params$reg), subtitle = 'Número de estabelcimientos educacionales')
+
+GRAFICO_2_REG
+```
+
+Transformamos nuevamente a clase sf para mepear en leaflet:
+
+```{r sf 2, echo=F}
+mapa_lf <- st_sf(escuelas) # Mapa tiene que ser clase sf
+st_crs(mapa_lf)
+mapa_lf <- st_transform(mapa_lf,crs = "+proj=longlat +datum=WGS84")
+```
+
+Graficamos nuevamente para leaflet:
+
+```{r leaflet 2, echo=F}
+pal_2 = colorFactor("YlOrRd",domain = mapa_lf$quantile)
+
+leaflet(mapa_lf) %>% 
+  addTiles() %>%
+  addPolygons(stroke = FALSE, color = ~pal_2(quantile), weight = 2, fillOpacity = 0.5,group = "Quantile",popup = ~COMUNA) %>%
+  addLegend(pal = pal_2, values = ~quantile, opacity = 1,position = "bottomright",title = "Quintiles",group = "Quantile")
+```
+
+Ahora haremos una breve introducción a los mapas de calor/densidad en leaflet: 
+
+```{r leaflet 2, echo=F}
+leaflet(rbd) %>% 
+  addTiles() %>%
+  addHeatmap(lng = ~LONGITUD, lat = ~LATITUD, blur = 15, max = 0.001, radius = 10)
+```
+
+Dado que no hemos filtrado por tipo de establecimientos educacionales, se observa que existe una grán dispersión de los datos por toda la comuna. Con datos más específicos puede ser una buena idea como gráfico para mostrar densidad de clientes/empresas u otras cosas que se encuentran relativamente juntas.
+
+## Repaso paquete google
+
+```{r paquetes 2, warning=f, message=F, echo=F}
+library(googleway)
+```
+
+Antes de comenzar, es necesario indicar que para poder utilizar las fuciones del paquete googleways es necesario habilitar ciertas funciones en el proyecto del cual se extrajo la API. En esta ayudantía utilizaremos tres funciones de googleways: "google_places", "goolge_geocode" y "google_distance". Para habilitar dichas funciones en su proyecto, vaya al siguiente link (<https://console.cloud.google.com/google/maps-apis/start>) en su cuenta > vaya al menú que aparece en la esquina superior izquierda > APIs y servicios > Biblioteca. En dicha página aparecerá en la mitad derecha de la página una opción que dice "Ver Todas (15)" y haga click ahí. Las opciones que debe de habilitar son "Geolocation API", "Distance Matrix API" y "Places API".
+Para obtener la API volvemos al Menú principal > APIs y servicios > Credenciales. Copiamos el código de la API de nuestro proyecto (si tiene más de una API en dicho proyecto selecciona cualquiera) y volvemos a R. Creamos un objeto con el código de la API y seleccionamos que funciones estáran disponibles con dicha API (la función "set_key" permite ingresar una sola vez por sesión la API y en las funciones leerá automaticamente dicha key). Esto permite no ir agregando cada vez la clave API en cada función. Si deseamos que solo ciertas funciones están disponibles con dicha API, seleccionamos aquellos servicios que si necesitaremos:
+
+```{r pressure, echo=FALSE}
+api_key <- # Agregar Api
+set_key(key = api_key, api = "geocode")
+set_key(key = api_key, api = "places")
+set_key(key = api_key, api = "distance")
+google_keys()
+```
+
+Supongamos que deseamos abrir un local de sushi en Viña del Mar. Para eso deseamos saber donde posicionarnos de acuerdo a la distribución espacial de la competencia. Necesitamos extrae la ubicación espacial de los restaurantes en Viña del Mar, por lo cual utilizaremos un loop para solicitar los datos:
+
+```{r loop, echo=F}
+#Restaurantes <- NULL
+
+#while(ifelse(is.null(Restaurantes),0,nrow(Restaurantes)) < 60) { # Queremos que el loop itere hasta tener mínimo 200 observaciones
+  
+#  print(nrow(Restaurantes)) # Aquí nos dice fuantas filas/observaciones llevamos
+#  Sys.sleep(3) # El loop para 3 segundos para alcanzar a leer cuantas obs. hay y alcanzar a parar en caso de un error en el código
+  
+#  if(ifelse(is.null(Restaurantes),0,nrow(Restaurantes)) < 20){
+    
+#  Competencia <- google_places(search_string = "Pubs en Vina del Mar",location = c(-33.017380,-71.553888), language = "es", key = api_key) # En este if se pedirán los primeros 20 datos (no se necesita argumento "page_token")
+#  Competencia2 <- data.table(Competencia$results)
+#  Competencia2 <- Competencia2[,.(business_status,formatted_address,geometry.location.lat,geometry.location.lng,name,rating,user_ratings_total,price_level)]
+  
+#  } else {
+    
+#  Competencia <- google_places(search_string = "Pubs en Vina del Mar",location = c(-33.017380,-71.553888), language = "es", key = api_key, page_token = Competencia$next_page_token) # Aquí pedimos el resto de las 180 observaciones. Aquí si se necesita el argumento "next_token". Por eso se separa el loop en dos casos.
+#  Competencia2 <- data.table(Competencia$results)
+#  Competencia2 <- Competencia2[,.(business_status,formatted_address,geometry.location.lat,geometry.location.lng,name,rating,user_ratings_total,price_level)]
+  
+#  }
+  
+#  Restaurantes <- rbind(Restaurantes,Competencia2) # Aquí pegamos 
+  
+#}
+Restaurantes <- data.table(readRDS("Restaurantes.rds"))
+saveRDS(Restaurantes, "Restaurantes.rds") # MUY IMPORTANTE GUARDAR LOS DATOS
+```
+
+(Nota: google places no puede extraer más de 60 búsquedas <https://stackoverflow.com/questions/12382669/google-places-api-more-than-60-results>)
+Recordar que las solicitudes de google_places se guardan en clase lista. Por lo tanto, para extraer la tabla de datos que nos interesa del objeto (results), creamos un objeto data.table que guarde dichos datos para luego ser agregados a los datos previamente buscados (hagase amigo de los loops... pueden abreviar mucha codificación cuando se está trabajando con muchos datos). Ahora que ya tenemos los datos, mapeamos:
+
+```{r competencia, echo=F}
+leaflet(Restaurantes) %>% 
+  addTiles() %>%
+  addMarkers(lat = ~geometry.location.lat, lng = ~geometry.location.lng, popup = ~name)
+```
+
+Filtramos los datos lejanos a Viña del Mar (Reñaca) y creamos varialbe para clasificar locales por categorías de evaluación:
+
+```{r breaks, echo=F}
+Restaurantes2 <- Restaurantes[!name %in% c("Pub La Curva","Pub Restaurant Tiki Takos"),]
+
+breaks_fixed = classIntervals(Restaurantes2$rating, style = "fixed",fixedBreaks = c(0,1,2,3,4,5))
+Restaurantes2$fixed = cut(Restaurantes2$rating,breaks = breaks_fixed$brks, include.lowest = T, labels = c("blue","green", "yellow","orange","red"))
+```
+
+Creamos datos para los marcadores categóricos:
+
+```{r colores, echo=F}
+blue <- makeAwesomeIcon(icon= 'flag', markerColor = 'blue', iconColor = 'black')
+green <- makeAwesomeIcon(icon = 'flag', markerColor = 'green', iconColor = 'black')
+yellow <- makeAwesomeIcon(icon = 'flag', markerColor = 'green', iconColor = 'black')
+orange <- makeAwesomeIcon(icon = 'flag', markerColor = 'orange', iconColor = 'black')
+red <- makeAwesomeIcon(icon = 'flag', markerColor = 'red', iconColor = 'black')
+```
+
+Cambiamos la función "addMarkers" por "addAwsomeMarkers" para hacer compatible con la función "makeAwsomeIcon" previamente utilizadas:
+
+```{r a}
+leaflet() %>% 
+  addTiles() %>%
+  addAwesomeMarkers(Restaurantes2[fixed=="blue"], 
+                    lat = Restaurantes2[fixed=="blue"]$geometry.location.lat, 
+                    lng = Restaurantes2[fixed=="blue"]$geometry.location.lng, 
+                    popup = paste("Nombre:",Restaurantes2[fixed=="blue"]$name,"<br>",
+                                  "Rating:",Restaurantes2[fixed=="blue"]$rating), icon = blue) %>%
+  addAwesomeMarkers(Restaurantes2[fixed=="green"], 
+                    lat = Restaurantes2[fixed=="green"]$geometry.location.lat, 
+                    lng = Restaurantes2[fixed=="green"]$geometry.location.lng, 
+                    popup = paste("Nombre:",Restaurantes2[fixed=="green"]$name,"<br>",
+                                  "Rating:",Restaurantes2[fixed=="green"]$rating), icon = green) %>%
+  addAwesomeMarkers(Restaurantes2[fixed=="yellow"], 
+                    lat = Restaurantes2[fixed=="yellow"]$geometry.location.lat, 
+                    lng = Restaurantes2[fixed=="yellow"]$geometry.location.lng, 
+                    popup = paste("Nombre:",Restaurantes2[fixed=="yellow"]$name,"<br>",
+                                  "Rating:",Restaurantes2[fixed=="yellow"]$rating), icon = yellow) %>%
+  addAwesomeMarkers(Restaurantes2[fixed=="orange"], 
+                    lat = Restaurantes2[fixed=="orange"]$geometry.location.lat, 
+                    lng = Restaurantes2[fixed=="orange"]$geometry.location.lng, 
+                    popup = paste("Nombre:",Restaurantes2[fixed=="orange"]$name,"<br>",
+                                  "Rating:",Restaurantes2[fixed=="orange"]$rating), icon = orange) %>%
+  addAwesomeMarkers(Restaurantes2[fixed=="red"], 
+                    lat = Restaurantes2[fixed=="red"]$geometry.location.lat, 
+                    lng = Restaurantes2[fixed=="red"]$geometry.location.lng, 
+                    popup = paste("Nombre:",Restaurantes2[fixed=="red"]$name,"<br>",
+                                  "Rating:",Restaurantes2[fixed=="red"]$rating), icon = red)
+```
+
+Para una situación así, un mapa de densidad puede ser buena opción:
+
+```{r leaflet 2, echo=F}
+leaflet(Restaurantes2) %>% 
+  addTiles() %>%
+  addHeatmap(lng = ~geometry.location.lng, lat = ~geometry.location.lat, blur = 15, max = 0.001, radius = 10)
+```
+
+Si bien es buena idea analizar la conglomeración espacial de la competencia, no es el único parámetro util para decidir donde establecer el local. Un segundo factor es la densidad poblacional. Si bien no tenemos los datos espaciales de las personas a nivel individual, se puede hacer una aproximación a nivel manzana con los datos a nivel manzana entregadas por el INE (obtenidas del Censo). Los datos se pueden obtener de: <http://geoine-ine-chile.opendata.arcgis.com/datasets/54e0c40680054efaabeb9d53b09e1e7a_0/data>. A su vez, de la misma página web se pueden obtener los shapefiles de las manzanas:  <http://geoine-ine-chile.opendata.arcgis.com/datasets/589bb9676dc04a18b2dced0d4b9043bf_117/data?geometry=-72.511%2C-33.237%2C-70.659%2C-32.834>. Por lo tanto, si hacemos un merge entre ambas bases podemos establecer la densidad poblacional a nivel manzana de Viña del Mar:
+
+```{r educación, echo=F}
+personas <- data.table(readRDS("personas.rds"))
+personas <- personas[ZONA_CENSAL %between% c(1,4) & CODIGO_DISTRITO %in% c(1,2,3,8,9) & CUT == 5109,]
+
+manzanas <- data.table(st_read("a228fe7c-d77b-421c-9a12-2ac9acc733c0202048-1-18kt26f.m26f/a228fe7c-d77b-421c-9a12-2ac9acc733c0202048-1-18kt26f.m26f.shp"))
+manzanas <- manzanas[COD_LOCALI %between% c(1,4) & COD_DISTRI %in% c(1,2,3,8,9) & CUT == 5109,]
+
+base <- merge(manzanas, personas[,.(MANZENT,TOTAL_PERSONAS)], by.x = "MANZENT_I",by.y = "MANZENT")
+```
+
+Los datos de comuna, distrito, zona y manzana pueden ser encontrado en la página web del INE o bien en <https://www.arcgis.com/apps/webappviewer/index.html?id=bc3cfbd4feec49699c11e813ae9a629f>. Transformamos la base a clase sf para mapear en leaflet:
+
+```{r sf 3, echo=F}
+base_lf <- st_sf(base) # Mapa tiene que ser clase sf
+st_crs(base_lf)
+base_lf <- st_transform(base_lf,crs = "+proj=longlat +datum=WGS84")
+```
+
+Creamos los polígonos de las manzanas, en donde el "fill" será el número de personas que posee la manzana según el censo del 2017 (densidad poblacional):
+
+```{r leaflet 5, echo=F}
+pal <- colorBin("YlOrRd", domain = base$TOTAL_PERSONAS)
+
+leaflet(base_lf) %>% 
+  addTiles() %>%
+  addPolygons(fillColor = ~pal(TOTAL_PERSONAS), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~TOTAL_PERSONAS) %>%
+  addLegend(pal = pal, values = ~TOTAL_PERSONAS, opacity = 1,position = "bottomright",title = "Personas")
+```
+
+Sería buena estrategia ver como la cometencia de distribuye de acuerdo a la densidad pobacional (lo que nos puede ayudar a entender que motiva a las empresas a escoger dichas locaciones):
+
+```{r leaflet 6, echo=F}
+leaflet() %>% 
+  addTiles() %>%
+  setView(-71.551, -33.019, zoom = 14) %>%
+  addMapPane("ames_polygon", zIndex = 310) %>%
+  addMapPane("ames_heatmap", zIndex = 420) %>%
+  addPolygons(data = base_lf,fillColor = ~pal(TOTAL_PERSONAS), weight = 2, opacity = 1, color = "black", dashArray = "3",fillOpacity = 0.5,popup = ~TOTAL_PERSONAS, options = pathOptions(pane = "ames_polygon")) %>%
+  addHeatmap(data = Restaurantes2,lng = ~geometry.location.lng, lat = ~geometry.location.lat, blur = 10, max = 0.001, radius = 10) %>%
+  addLegend(data = base_lf, pal = pal, values = base_lf$TOTAL_PERSONAS, opacity = 1,position = "bottomright",title = "Personas") 
+```
