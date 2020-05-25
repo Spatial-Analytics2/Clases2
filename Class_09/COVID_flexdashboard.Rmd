@@ -1,0 +1,83 @@
+---
+title: "COVID Dashboard Spatial Analytics"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: scroll
+    theme: cosmo
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+packageList<-c("flexdashboard",'data.table',"chilemapas","sf","classInt","leaflet","RColorBrewer","ggplot2")
+sapply(packageList,FUN = require,character.only=TRUE)
+
+COVID<-data.table(readRDS("COVID_confirmados.rds"))
+COVID$`Codigo region`<-as.character(COVID$`Codigo region`)
+COVID[nchar(`Codigo region`)==1,`Codigo region`:=paste0("0",`Codigo region`)]
+COVID$`Codigo comuna`<-as.character(COVID$`Codigo comuna`)
+COVID[nchar(`Codigo comuna`)==4,`Codigo comuna`:=paste0("0",`Codigo comuna`)]
+
+
+# Mapping Rates
+#concepts
+# O_i: Observed Events at spatial unit i  (`Casos Confirmados`)
+# P_i: Population at risk at spatial unit i (Poblacion)
+# r_i:  Risk rate at spatial unit i (O_i/P_i)
+# AR:  Average Risk Rate (sum(O_i)/sum(P_i))
+# E_i: Expected Events at spatial unit i (r*P_i)
+# R_i: Relative Risk at spatial unit i (Excess Risk)  (O_i/E_i)
+
+# Raw rate
+COVID$r_i<-COVID$Confirmados/COVID$Poblacion
+
+# Relative Rate
+COVID[,AR:=sum(Confirmados,na.rm = T)/sum(Poblacion,na.rm = T),by=.(Region)]
+COVID$E_i<-COVID$Poblacion*COVID$AR
+COVID$R_i<-COVID$Confirmados/COVID$E_i
+
+regionNames<-data.table(Reg_label=unique(COVID$Region),Region=unique(COVID$`Codigo region`))
+varNames<-data.table(var=names(COVID)[c(5,7,9,12)],varLabel=c("Población","Casos Confirmados","Tasa Cruda de Riesgo","Tasa Relativa de Riesgo"))
+timeNames<-unique(COVID$time)
+
+```
+
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+Seleccione la región, la fecha y la variable que desea analizar.
+
+```{r}
+selectInput("region",label = "Región:",
+            choices = regionNames$Reg_label,selected = "Metropolitana")
+
+selectInput("variable",label = "Variable:",
+            choices = varNames$varLabel,selected = "Casos Confirmados")
+
+selectInput("time",label = "Fecha:",
+            choices = timeNames,selected = last(timeNames))
+```
+
+
+Row
+-----------------------------------------------------------------------
+
+### Mapa Comunal
+
+```{r Confirmados_Nivel1}
+comunasReg<-reactive({
+  merge(x = mapa_comunas[mapa_comunas$codigo_region==regionNames[Reg_label==input$region]$Region,],y = COVID[Region==input$region & time==input$time,],by.x="codigo_comuna",by.y="Codigo comuna",all.x=TRUE,sort=F)  
+})
+
+
+renderPlot({
+ggplot(comunasReg()) +
+  geom_sf(aes(fill = eval(parse(text = varNames[varLabel==input$variable]$var)), geometry = geometry)) +
+  scale_fill_gradientn(colours = brewer.pal(n = 5,name = "Reds"), name = "No. Casos") +
+  labs(title = input$variable , subtitle = paste(input$region,input$time)) +
+  theme_minimal(base_size = 11)  
+})
+
+```
+
